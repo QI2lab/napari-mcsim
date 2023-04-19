@@ -1,0 +1,11 @@
+name: napari-mcsim
+display_name: mcSIM Plugin
+schema_version: 0.2.0
+contributions:
+  commands:
+    - id: napari-mcsim.make_widget
+      title: Create Main Window
+      python_name: napari_mcsim.mcsim_plugin:MCSIM
+  widgets:
+    - command: napari-mcsim.make_widget  # note, same as command.id above
+      display_name: mcSIM

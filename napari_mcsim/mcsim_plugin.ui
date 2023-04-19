@@ -1,0 +1,588 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QWidget" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>652</width>
+    <height>1254</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>9</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="data_groupBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>300</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="title">
+      <string>Select SIM data</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="0" column="7">
+       <widget class="QPushButton" name="browse_Button">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>choose file</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>wavelength (nm)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="6">
+       <widget class="QLineEdit" name="browse_LineEdit">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="7">
+       <widget class="QSpinBox" name="nangles_spinBox"/>
+      </item>
+      <item row="3" column="1">
+       <widget class="QDoubleSpinBox" name="wavelength_doubleSpinBox">
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <double>10000000000.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>10.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="6">
+       <widget class="QComboBox" name="file_type_comboBox"/>
+      </item>
+      <item row="2" column="7">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>select Napari layer</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="7">
+       <widget class="QSpinBox" name="nphases_spinBox"/>
+      </item>
+      <item row="9" column="0" colspan="8">
+       <widget class="QPushButton" name="initialize_Button">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>30</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Initialize</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="7">
+       <widget class="QLabel" name="label_14">
+        <property name="text">
+         <string>zarr/hd5f array</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QDoubleSpinBox" name="pixel_size_doubleSpinBox">
+        <property name="decimals">
+         <number>3</number>
+        </property>
+        <property name="maximum">
+         <double>100000000000000.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="7">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>num angles:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="6" alignment="Qt::AlignRight">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>NA</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="7">
+       <widget class="QDoubleSpinBox" name="na_doubleSpinBox">
+        <property name="maximum">
+         <double>2.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="7">
+       <widget class="QComboBox" name="array_select_comboBox"/>
+      </item>
+      <item row="4" column="0" rowspan="5" colspan="7">
+       <widget class="QTableWidget" name="dimension_tableWidget">
+        <attribute name="horizontalHeaderMinimumSectionSize">
+         <number>30</number>
+        </attribute>
+        <attribute name="horizontalHeaderDefaultSectionSize">
+         <number>175</number>
+        </attribute>
+        <column>
+         <property name="text">
+          <string>size</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>dimension type (fastest to slowest)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>dimension description</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="7">
+       <widget class="QComboBox" name="layer_comboBox">
+        <property name="iconSize">
+         <size>
+          <width>32</width>
+          <height>16</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="label_10">
+        <property name="text">
+         <string>pixel size (um)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="7">
+       <widget class="QLabel" name="label_11">
+        <property name="text">
+         <string>num phases:</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="otf_groupBox">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>170</height>
+      </size>
+     </property>
+     <property name="title">
+      <string>PSF/OTF</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="3" column="6">
+       <widget class="QLabel" name="label_13">
+        <property name="text">
+         <string>type</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0" colspan="6">
+       <widget class="QLineEdit" name="otf_lineEdit"/>
+      </item>
+      <item row="3" column="0" colspan="6">
+       <widget class="QComboBox" name="psf_mode_comboBox"/>
+      </item>
+      <item row="0" column="6">
+       <widget class="QComboBox" name="otf_format_comboBox"/>
+      </item>
+      <item row="2" column="6">
+       <widget class="QLabel" name="label_12">
+        <property name="text">
+         <string>select Napari layer</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="7">
+       <widget class="QPushButton" name="browse_otf_pushButton">
+        <property name="text">
+         <string>choose file</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="6">
+       <widget class="QComboBox" name="otf_layer_comboBox"/>
+      </item>
+      <item row="1" column="0" colspan="6">
+       <widget class="QComboBox" name="otf_array_comboBox"/>
+      </item>
+      <item row="1" column="6">
+       <widget class="QLabel" name="label_16">
+        <property name="text">
+         <string>zarr/hd5f array</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0" colspan="8">
+       <widget class="QPushButton" name="set_otf_pushButton">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>30</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>set</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="parameter_groupBox">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>200</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="title">
+      <string>SIM parameters</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="6" column="0" rowspan="4" colspan="4">
+       <widget class="QTableWidget" name="parameter_tableWidget">
+        <column>
+         <property name="text">
+          <string>fx</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>fy</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>phi</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>phi 2</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>phi 3</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>m</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>angle index</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>channel index</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item row="6" column="4">
+       <widget class="QPushButton" name="select_pushButton">
+        <property name="text">
+         <string>Select with double click</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="4">
+       <widget class="QPushButton" name="remove_pushButton">
+        <property name="text">
+         <string>Remove</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="4">
+       <widget class="QPushButton" name="clear_pushButton">
+        <property name="text">
+         <string>Clear</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="4">
+       <widget class="QPushButton" name="add_pushButton">
+        <property name="text">
+         <string>Add</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>250</height>
+      </size>
+     </property>
+     <property name="title">
+      <string>Reconstruct</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_4">
+      <item row="1" column="4">
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>Frq estimation mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="4">
+       <widget class="QCheckBox" name="gpu_checkBox">
+        <property name="text">
+         <string>Use GPU</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0" colspan="4">
+       <widget class="QComboBox" name="frq_comboBox"/>
+      </item>
+      <item row="0" column="0" colspan="4">
+       <widget class="QComboBox" name="phase_comboBox"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QCheckBox" name="simos_checkBox">
+        <property name="text">
+         <string>Compute OS</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QCheckBox" name="widefield_checkBox">
+        <property name="text">
+         <string>Compute widefield</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="4">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>Reconstruction mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="2">
+       <widget class="QCheckBox" name="deconvolve_checkBox">
+        <property name="text">
+         <string>Deconvolve</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="3">
+       <widget class="QCheckBox" name="mcnr_checkBox">
+        <property name="text">
+         <string>Compute MCNR</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="4">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Phase estimation mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="4">
+       <widget class="QComboBox" name="recon_mode_comboBox"/>
+      </item>
+      <item row="6" column="0" colspan="3">
+       <widget class="QPushButton" name="reconstruct_pushButton">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Reconstruct</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="3" colspan="2">
+       <widget class="QPushButton" name="show_recon_pushButton">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Show</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="save_groupBox">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>150</height>
+      </size>
+     </property>
+     <property name="title">
+      <string>Saving</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="1" column="1">
+       <widget class="QLabel" name="label_9">
+        <property name="text">
+         <string>prefix</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLineEdit" name="save_prefix_lineEdit"/>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLineEdit" name="save_lineEdit"/>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>file format</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QComboBox" name="save_format_comboBox"/>
+      </item>
+      <item row="0" column="1">
+       <widget class="QPushButton" name="select_save_dir_pushButton">
+        <property name="text">
+         <string>Select directory</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLineEdit" name="save_suffix_lineEdit"/>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLabel" name="label_15">
+        <property name="text">
+         <string>suffix</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTextEdit" name="textEdit"/>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>browse_LineEdit</tabstop>
+  <tabstop>browse_Button</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
