@@ -4,23 +4,13 @@ from qtpy import uic, QtCore
 import napari.viewer
 
 from pathlib import Path
-# from mcsim.analysis import sim_reconstruction
-from mcsim.analysis.sim_reconstruction import SimImageSet
-import localize_psf.fit_psf as fpsf
 import tifffile
 import zarr
+from io import StringIO
 import numpy as np
 import threading
-from io import StringIO
-
-# ComboBox subclass which emits signal when clicked on
-# https://itecnote.com/tecnote/python-qcombobox-click-event/
-# class ComboBox(QtW.QComboBox):
-#     popupAboutToBeShown = QtCore.pyqtSignal()
-#
-#     def showPopup(self):
-#         self.popupAboutToBeShown.emit()
-#         super(ComboBox, self).showPopup()
+from mcsim.analysis.sim_reconstruction import SimImageSet
+import localize_psf.fit_psf as fpsf
 
 # wrap printing to textEdit wdiget to look like file.
 class TextEditStringIO(StringIO):
@@ -47,6 +37,8 @@ class MCSIM(QWidget):
 
         # SIM instance
         self.sim = None
+        self.fx = None
+        self.fy = None
 
         # layers
         self.raw_layer = None
@@ -64,6 +56,11 @@ class MCSIM(QWidget):
         # print results
         self.textEdit.setReadOnly(True)
         self.stream = TextEditStringIO(self.textEdit) # print("test stream", file=self.stream)
+
+        # disconnect napari update coordinate display and replace with our own
+        self.viewer.cursor.events.position.disconnect()
+        self.viewer.cursor.events.position.connect(self._update_status_bar_from_cursor)
+
 
         # saving and loading data
         self.supported_file_types = ["tiff", "zarr", "hd5f"]
@@ -124,6 +121,79 @@ class MCSIM(QWidget):
         # saving
         self.select_save_dir_pushButton.clicked.connect(self._browse_save_dir)
         self.save_format_comboBox.addItems(self.supported_file_types)
+
+    def _convert_pixel_to_frq(self, cy, cx):
+
+        if self.fx is None:
+            fx = np.nan
+        else:
+            fxs = self.fx
+            ix_low = int(np.floor(cx))
+            ix_high = int(np.ceil(cx))
+
+            try:
+                fx = fxs[ix_low] * (ix_high - cx) + fxs[ix_high] * (cx - ix_low)
+            except IndexError:
+                fx = np.nan
+
+        if self.fy is None:
+            fy = np.nan
+        else:
+            fys = self.fy
+            iy_low = int(np.floor(cy))
+            iy_high = int(np.ceil(cy))
+            try:
+                fy = fys[iy_low] * (iy_high - cy) + fys[iy_high] * (cy - iy_low)
+            except IndexError:
+                fy = np.nan
+
+        return fy, fx
+
+    def _update_status_bar_from_cursor(self, event):
+        """
+        Replacement for viewer function which knows about the FFT coordinates
+        :param event:
+        :return:
+        """
+        # Update status and help bar based on active layer
+
+        active = self.viewer.layers.selection.active
+        fft_layer_active = active is not None and active == self.fft_layer
+
+        if not fft_layer_active or self.sim is None:
+            # call the usual function
+            self.viewer._update_status_bar_from_cursor(event)
+        else:
+            if not self.viewer.mouse_over_canvas:
+                return
+
+            cursor_pos = self.viewer.cursor.position # canvas coords
+            cursor_pos_data = active.world_to_data(cursor_pos)
+
+            # convert to FFT frequency
+            cy, cx = cursor_pos_data[-2:]
+            fy, fx, = self._convert_pixel_to_frq(cy, cx)
+
+            st = active.get_status(
+                cursor_pos,
+                view_direction=None, #self.viewer.cursor._view_direction,
+                dims_displayed=list(self.viewer.dims.displayed),
+                world=True,
+            )
+
+            st["coordinates"] = f"(fy, fx) = [{fy:.3f} {fx:.3f}]" + st["coordinates"]
+
+            self.viewer.status = st
+
+            # todo: update this part too...
+            self.viewer.help = active.help
+            if self.viewer.tooltip.visible:
+                self.viewer.tooltip.text = active._get_tooltip_text(
+                    self.viewer.cursor.position,
+                    view_direction=None, #self.viewer.cursor._view_direction,
+                    dims_displayed=list(self.dims.displayed),
+                    world=True,
+                )
 
     def browse_files(self, file_type):
 
@@ -249,6 +319,7 @@ class MCSIM(QWidget):
 
         if layer is not None:
             ndim = layer.data.ndim
+            shape = layer.data.shape
         else:
             fname = Path(self.browse_LineEdit.text())
             array_name = self.array_select_comboBox.currentText()
@@ -332,7 +403,6 @@ class MCSIM(QWidget):
         # todo: less brute force ways to do this ... but this is fine for now
         # insert dimensions in opposite order, because strings are ordered from fastest-to-slowest-axis
         # while python array ordered from slowest-to-fastest axis
-        # new
         output_shape = []
         output_axes_names = []
         for ii in range(nrows):
@@ -420,7 +490,6 @@ class MCSIM(QWidget):
 
         return output_shape, transpose_axes, output_axes_names
 
-
     def _initialize_sim(self):
         # if layer is selected, load this. Otherwise try to load file
         layer_selected = self.layer_comboBox.currentText()
@@ -444,24 +513,29 @@ class MCSIM(QWidget):
 
         # get axes and reshape to correct size
         reshape_size, transpose_axes, axes_names = self._detect_dimensions()
-        imgs = imgs.reshape(reshape_size).transpose(transpose_axes)
+        try:
+            imgs = imgs.reshape(reshape_size).transpose(transpose_axes)
+        except ValueError as e:
+            print(e)
+            return
 
         def _preprocess():
-            self.sim_lock.acquire()
+            with self.sim_lock:
+                self.sim = SimImageSet(use_gpu=False,
+                                       print_to_terminal=True)
+                self.sim.add_stream(self.stream) # print to widget
+                self.sim.preprocess_data(pix_size_um=self.pixel_size_doubleSpinBox.value(),
+                                         na=self.na_doubleSpinBox.value(),
+                                         wavelength=self.wavelength_doubleSpinBox.value() / 1e3, # in um
+                                         imgs=imgs,
+                                         normalize_histograms=True,
+                                         gain=2,
+                                         background=100,
+                                         axes_names=axes_names)
 
-            self.sim = SimImageSet(use_gpu=False,
-                                   print_to_terminal=True)
-            self.sim.add_stream(self.stream) # print to widget
-            self.sim.preprocess_data(pix_size_um=self.pixel_size_doubleSpinBox.value(),
-                                     na=self.na_doubleSpinBox.value(),
-                                     wavelength=self.wavelength_doubleSpinBox.value() / 1e3, # in um
-                                     imgs=imgs,
-                                     normalize_histograms=True,
-                                     gain=2,
-                                     background=100,
-                                     axes_names=axes_names)
-
-            self.sim_lock.release()
+                # store frequency elsewhere so can access without acquiring lock
+                self.fx = self.sim.fx
+                self.fy = self.sim.fy
 
         # main advantage of threading here is GUI will update immediately with printed results
         if self.worker_thread is not None:
@@ -517,9 +591,8 @@ class MCSIM(QWidget):
             else:
                 raise ValueError(f"mode={mode:s} is not supported")
 
-        self.sim_lock.acquire()
-        self.sim.update_otf(otf)
-        self.sim_lock.release()
+        with self.sim_lock:
+            self.sim.update_otf(otf)
 
     def _refresh_channel_axes(self):
         pass
@@ -560,18 +633,8 @@ class MCSIM(QWidget):
             data_coord = self.fft_layer.world_to_data(canvas_coord)
 
             cy, cx = data_coord[-2:]
+            fy, fx, = self._convert_pixel_to_frq(cy, cx)
             angle_ind = data_coord[-4]
-
-            # todo: convert to FFT coordinates
-            fxs = self.sim.fx
-            ix_low = int(np.floor(cx))
-            ix_high = int(np.ceil(cx))
-            fx = fxs[ix_low] * (ix_high - cx) + fxs[ix_high] * (cx - ix_low)
-
-            fys = self.sim.fy
-            iy_low = int(np.floor(cy))
-            iy_high = int(np.ceil(cy))
-            fy = fys[iy_low] * (iy_high - cy) + fys[iy_high] * (cy - iy_low)
 
             # add to table
             self._add_parameters()
@@ -692,47 +755,44 @@ class MCSIM(QWidget):
         phases_guess = phases_guess * np.pi / 180.
 
         def _recon_and_save():
-            self.sim_lock.acquire()
-            self.sim_lock.acquire()
+            with self.sim_lock:
+                if self.sim.otf is None:
+                    self.sim.update_otf()
 
-            if self.sim.otf is None:
-                self.sim.update_otf()
+                # todo: add freedom to set more of these parameters
+                self.sim.update_recon_settings(wiener_parameter=0.1,
+                                               frq_estimation_mode=frq_mode,
+                                               phase_estimation_mode=phase_mode,
+                                               combine_bands_mode="fairSIM",
+                                               fmax_exclude_band0=0,
+                                               use_fixed_mod_depths=False,
+                                               minimum_mod_depth=0.3,
+                                               determine_amplitudes=False,
+                                               min_p2nr=1,
+                                               trim_negative_values=True)
 
-            # todo: add freedom to set more of these parameters
-            self.sim.update_recon_settings(wiener_parameter=0.1,
-                                           frq_estimation_mode=frq_mode,
-                                           phase_estimation_mode=phase_mode,
-                                           combine_bands_mode="fairSIM",
-                                           fmax_exclude_band0=0,
-                                           use_fixed_mod_depths=False,
-                                           minimum_mod_depth=0.3,
-                                           determine_amplitudes=False,
-                                           min_p2nr=1,
-                                           trim_negative_values=True)
+                self.sim.update_parameter_guesses(frq_guess=frq_guess,
+                                                  phases_guess=phases_guess,
+                                                  mod_depths_guess=mod_depths_guess)
 
-            self.sim.update_parameter_guesses(frq_guess=frq_guess,
-                                              phases_guess=phases_guess,
-                                              mod_depths_guess=mod_depths_guess)
+                self.sim.reconstruct(slices=None,
+                                     compute_widefield=compute_widefield,
+                                     compute_os=compute_os,
+                                     compute_deconvolved=compute_deconvolve,
+                                     compute_mcnr=compute_mcnr)
 
-            self.sim.reconstruct(slices=None,
-                                 compute_widefield=compute_widefield,
-                                 compute_os=compute_os,
-                                 compute_deconvolved=compute_deconvolve,
-                                 compute_mcnr=compute_mcnr)
+                # saving
+                if self.save_groupBox.isChecked():
+                    self.sim.save_imgs(save_dir=Path(self.save_lineEdit.text()),
+                                       save_suffix=self.save_suffix_lineEdit.text(),
+                                       save_prefix=self.save_prefix_lineEdit.text(),
+                                       format=self.save_format_comboBox.currentText(),
+                                       save_patterns=False,
+                                       save_raw_data=False,
+                                       save_processed_data=False)
+                else:
+                    self.sim.print_parameters()
 
-            # saving
-            if self.save_groupBox.isChecked():
-                self.sim.save_imgs(save_dir=Path(self.save_lineEdit.text()),
-                                   save_suffix=self.save_suffix_lineEdit.text(),
-                                   save_prefix=self.save_prefix_lineEdit.text(),
-                                   format=self.save_format_comboBox.currentText(),
-                                   save_patterns=False,
-                                   save_raw_data=False,
-                                   save_processed_data=False)
-            else:
-                self.sim.print_parameters()
-
-            self.sim_lock.release()
 
         if self.worker_thread is not None:
             self.worker_thread.join()
@@ -742,75 +802,72 @@ class MCSIM(QWidget):
         self.worker_thread.start()
     def _show(self):
 
-        self.sim_lock.acquire()
+        with self.sim_lock:
+            if self.sim is None:
+                return
 
-        if self.sim is None:
-            return
+            if self.sim.imgs is not None:
+                if self.raw_layer is None:
+                    self.raw_layer = self.viewer.add_image(self.sim.imgs,
+                                                           name="raw SIM data")
+                else:
+                    self.raw_layer.data = self.sim.imgs
 
-        if self.sim.imgs is not None:
-            if self.raw_layer is None:
-                self.raw_layer = self.viewer.add_image(self.sim.imgs,
-                                                       name="raw SIM data")
-            else:
-                self.raw_layer.data = self.sim.imgs
+                # set axes names
+                try:
+                    self.viewer.dims.axis_labels = self.sim.axes_names
+                except Exception as e:
+                    print(e)
 
-            # set axes names
-            try:
-                self.viewer.dims.axis_labels = self.sim.axes_names
-            except Exception as e:
-                print(e)
+                # set to first slices
+                for id in range(self.sim.imgs.ndim - 2):
+                    self.viewer.dims.set_current_step(axis=id, value=0)
 
-            # set to first slices
-            for id in range(self.sim.imgs.ndim - 2):
-                self.viewer.dims.set_current_step(axis=id, value=0)
+            if self.sim.imgs_ft is not None:
+                if self.fft_layer is None:
+                    self.fft_layer = self.viewer.add_image(abs(self.sim.imgs_ft),
+                                                           name="raw SIM data fft",
+                                                           translate=[0, self.sim.nx],
+                                                           gamma=0.2)
+                else:
+                    self.fft_layer.data = abs(self.sim.imgs_ft)
 
-        if self.sim.imgs_ft is not None:
-            if self.fft_layer is None:
-                self.fft_layer = self.viewer.add_image(abs(self.sim.imgs_ft),
-                                                       name="raw SIM data fft",
-                                                       translate=[0, self.sim.nx],
-                                                       gamma=0.2)
-            else:
-                self.fft_layer.data = abs(self.sim.imgs_ft)
+            if self.sim.widefield is not None:
+                if self.widefield_layer is None:
+                    self.widefield_layer = self.viewer.add_image(self.sim.widefield,
+                                                                 name="SIM widefield")
+                else:
+                    self.widefield_layer.data = self.sim.widefield
 
-        if self.sim.widefield is not None:
-            if self.widefield_layer is None:
-                self.widefield_layer = self.viewer.add_image(self.sim.widefield,
-                                                             name="SIM widefield")
-            else:
-                self.widefield_layer.data = self.sim.widefield
+            if self.sim.widefield_deconvolution is not None:
+                if self.decon_layer is None:
+                    self.decon_layer = self.viewer.add_image(self.sim.widefield_deconvolution,
+                                                             name="SIM deconvolved")
+                else:
+                    self.decon_layer.data = self.sim.widefield_deconvolution
 
-        if self.sim.widefield_deconvolution is not None:
-            if self.decon_layer is None:
-                self.decon_layer = self.viewer.add_image(self.sim.widefield_deconvolution,
-                                                         name="SIM deconvolved")
-            else:
-                self.decon_layer.data = self.sim.widefield_deconvolution
+            if self.sim.mcnr is not None:
+                if self.mcnr_layer is None:
+                    self.mcnr_layer = self.viewer.add_image(self.sim.mcnr,
+                                                            name="MCNR")
+                else:
+                    self.mcnr_layer.data = self.sim.mcnr
 
-        if self.sim.mcnr is not None:
-            if self.mcnr_layer is None:
-                self.mcnr_layer = self.viewer.add_image(self.sim.mcnr,
-                                                        name="MCNR")
-            else:
-                self.mcnr_layer.data = self.sim.mcnr
+            if self.sim.sim_os is not None:
+                if self.sim_os_layer is None:
+                    self.sim_os_layer = self.viewer.add_image(self.sim.sim_os,
+                                                              name="SIM-OS")
+                else:
+                    self.sim_os_layer.data = self.sim.sim_os
 
-        if self.sim.sim_os is not None:
-            if self.sim_os_layer is None:
-                self.sim_os_layer = self.viewer.add_image(self.sim.sim_os,
-                                                          name="SIM-OS")
-            else:
-                self.sim_os_layer.data = self.sim.sim_os
-
-        if self.sim.sim_sr is not None:
-            if self.sim_sr_layer is None:
-                self.sim_sr_layer = self.viewer.add_image(self.sim.sim_sr,
-                                                          scale=(0.5, 0.5),
-                                                          translate=(0, 0), # todo: correct
-                                                          name="SIM-SR")
-            else:
-                self.sim_sr_layer.data = self.sim.sim_sr
-
-        self.sim_lock.release()
+            if self.sim.sim_sr is not None:
+                if self.sim_sr_layer is None:
+                    self.sim_sr_layer = self.viewer.add_image(self.sim.sim_sr,
+                                                              scale=(0.5, 0.5),
+                                                              translate=(0, 0), # todo: correct
+                                                              name="SIM-SR")
+                else:
+                    self.sim_sr_layer.data = self.sim.sim_sr
 
     def _browse_save_dir(self):
         file_dir = str(QtW.QFileDialog.getExistingDirectory(self, "", "save directory"))
