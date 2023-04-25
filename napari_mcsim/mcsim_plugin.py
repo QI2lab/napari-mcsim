@@ -115,6 +115,9 @@ class MCSIM(QWidget):
         self.phase_comboBox.addItems(SimImageSet.allowed_phase_estimation_modes)
         self.frq_comboBox.addItems(SimImageSet.allowed_frq_estimation_modes)
         self.recon_mode_comboBox.addItems(SimImageSet.allowed_reconstruction_modes)
+        self.band_replacement_doubleSpinBox.setValue(0.)
+        self.wiener_doubleSpinBox.setValue(0.1)
+
         self.reconstruct_pushButton.clicked.connect(self._reconstruct_sim)
         self.show_recon_pushButton.clicked.connect(self._show)
 
@@ -157,22 +160,19 @@ class MCSIM(QWidget):
         """
         # Update status and help bar based on active layer
 
-        active = self.viewer.layers.selection.active
-        fft_layer_active = active is not None and active == self.fft_layer
+        if not self.viewer.mouse_over_canvas:
+            return
 
-        if not fft_layer_active or self.sim is None:
+        active = self.viewer.layers.selection.active
+        fft_layer_active = active is not None and active == self.fft_layer and self.sim is not None
+
+        if active is not None:
             # call the usual function
-            self.viewer._update_status_bar_from_cursor(event)
-        else:
-            if not self.viewer.mouse_over_canvas:
-                return
+            # todo: this throws warning that this attribute will not be accessible after version 0.5.0
+            # self.viewer._update_status_bar_from_cursor(event)
 
             cursor_pos = self.viewer.cursor.position # canvas coords
             cursor_pos_data = active.world_to_data(cursor_pos)
-
-            # convert to FFT frequency
-            cy, cx = cursor_pos_data[-2:]
-            fy, fx, = self._convert_pixel_to_frq(cy, cx)
 
             st = active.get_status(
                 cursor_pos,
@@ -181,7 +181,11 @@ class MCSIM(QWidget):
                 world=True,
             )
 
-            st["coordinates"] = f"(fy, fx) = [{fy:.3f} {fx:.3f}]" + st["coordinates"]
+            if fft_layer_active:
+                # convert to FFT frequency
+                cy, cx = cursor_pos_data[-2:]
+                fy, fx, = self._convert_pixel_to_frq(cy, cx)
+                st["coordinates"] = f"(fy, fx) = [{fy:.3f} {fx:.3f}]" + st["coordinates"]
 
             self.viewer.status = st
 
@@ -521,7 +525,7 @@ class MCSIM(QWidget):
 
         def _preprocess():
             with self.sim_lock:
-                self.sim = SimImageSet(use_gpu=False,
+                self.sim = SimImageSet(use_gpu=self.gpu_checkBox.isChecked(),
                                        print_to_terminal=True)
                 self.sim.add_stream(self.stream) # print to widget
                 self.sim.preprocess_data(pix_size_um=self.pixel_size_doubleSpinBox.value(),
@@ -543,6 +547,10 @@ class MCSIM(QWidget):
 
         self.worker_thread = threading.Thread(target=_preprocess)
         self.worker_thread.start()
+
+        # todo: want to send signal when thread finishes and then show, but this will do for now
+        self.worker_thread.join()
+        self._show()
 
     def _refresh_otf_layers(self):
         self.otf_layer_comboBox.clear()
@@ -733,10 +741,11 @@ class MCSIM(QWidget):
         compute_os = self.simos_checkBox.isChecked()
         compute_deconvolve = self.deconvolve_checkBox.isChecked()
         compute_mcnr = self.mcnr_checkBox.isChecked()
-        use_gpu = self.gpu_checkBox.isChecked()
         phase_mode = self.phase_comboBox.currentText()
         frq_mode = self.frq_comboBox.currentText()
         recon_mode = self.recon_mode_comboBox.currentText()
+        wiener_param = self.wiener_doubleSpinBox.value()
+        fmax_exclude_band0 = self.band_replacement_doubleSpinBox.value()
 
         # grab guess parameters
         nfrqs = self.parameter_tableWidget.rowCount()
@@ -760,11 +769,11 @@ class MCSIM(QWidget):
                     self.sim.update_otf()
 
                 # todo: add freedom to set more of these parameters
-                self.sim.update_recon_settings(wiener_parameter=0.1,
+                self.sim.update_recon_settings(wiener_parameter=wiener_param,
                                                frq_estimation_mode=frq_mode,
                                                phase_estimation_mode=phase_mode,
                                                combine_bands_mode="fairSIM",
-                                               fmax_exclude_band0=0,
+                                               fmax_exclude_band0=fmax_exclude_band0,
                                                use_fixed_mod_depths=False,
                                                minimum_mod_depth=0.3,
                                                determine_amplitudes=False,
@@ -775,11 +784,14 @@ class MCSIM(QWidget):
                                                   phases_guess=phases_guess,
                                                   mod_depths_guess=mod_depths_guess)
 
+                # todo: need way to set slices for e.g. z-stacks
                 self.sim.reconstruct(slices=None,
                                      compute_widefield=compute_widefield,
                                      compute_os=compute_os,
                                      compute_deconvolved=compute_deconvolve,
                                      compute_mcnr=compute_mcnr)
+
+                self.sim.print_parameters()
 
                 # saving
                 if self.save_groupBox.isChecked():
@@ -790,8 +802,6 @@ class MCSIM(QWidget):
                                        save_patterns=False,
                                        save_raw_data=False,
                                        save_processed_data=False)
-                else:
-                    self.sim.print_parameters()
 
 
         if self.worker_thread is not None:
@@ -825,6 +835,7 @@ class MCSIM(QWidget):
 
             if self.sim.imgs_ft is not None:
                 if self.fft_layer is None:
+                    # todo: gamma will not update until slider is moved, see https://github.com/napari/napari/issues/1866
                     self.fft_layer = self.viewer.add_image(abs(self.sim.imgs_ft),
                                                            name="raw SIM data fft",
                                                            translate=[0, self.sim.nx],
