@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>652</width>
+    <width>669</width>
     <height>1254</height>
    </rect>
   </property>
@@ -539,7 +539,7 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>150</height>
+       <height>170</height>
       </size>
      </property>
      <property name="title">
@@ -552,28 +552,11 @@
       <bool>false</bool>
      </property>
      <layout class="QGridLayout" name="gridLayout_5">
-      <item row="1" column="1">
-       <widget class="QLabel" name="label_9">
-        <property name="text">
-         <string>prefix</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLineEdit" name="save_prefix_lineEdit"/>
+      <item row="2" column="0">
+       <widget class="QLineEdit" name="save_suffix_lineEdit"/>
       </item>
       <item row="0" column="0">
        <widget class="QLineEdit" name="save_lineEdit"/>
-      </item>
-      <item row="3" column="1">
-       <widget class="QLabel" name="label_8">
-        <property name="text">
-         <string>file format</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QComboBox" name="save_format_comboBox"/>
       </item>
       <item row="0" column="1">
        <widget class="QPushButton" name="select_save_dir_pushButton">
@@ -582,13 +565,37 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
-       <widget class="QLineEdit" name="save_suffix_lineEdit"/>
+      <item row="1" column="0">
+       <widget class="QLineEdit" name="save_prefix_lineEdit"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QComboBox" name="save_format_comboBox"/>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>file format</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLabel" name="label_9">
+        <property name="text">
+         <string>prefix</string>
+        </property>
+       </widget>
       </item>
       <item row="2" column="1">
        <widget class="QLabel" name="label_15">
         <property name="text">
          <string>suffix</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QCheckBox" name="save_diagnostic_plots_checkBox">
+        <property name="text">
+         <string>save diagnostic plots</string>
         </property>
        </widget>
       </item>

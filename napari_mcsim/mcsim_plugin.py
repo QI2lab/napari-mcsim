@@ -1,3 +1,7 @@
+"""
+GUI code for napari plugin for Structured illumination microscopy (SIM) reconstruction using mcsim
+"""
+
 from qtpy import QtWidgets as QtW
 from qtpy.QtWidgets import QWidget
 from qtpy import uic, QtCore
@@ -11,6 +15,7 @@ import numpy as np
 import threading
 from mcsim.analysis.sim_reconstruction import SimImageSet
 import localize_psf.fit_psf as fpsf
+
 
 # wrap printing to textEdit wdiget to look like file.
 class TextEditStringIO(StringIO):
@@ -60,7 +65,6 @@ class MCSIM(QWidget):
         # disconnect napari update coordinate display and replace with our own
         self.viewer.cursor.events.position.disconnect()
         self.viewer.cursor.events.position.connect(self._update_status_bar_from_cursor)
-
 
         # saving and loading data
         self.supported_file_types = ["tiff", "zarr", "hd5f"]
@@ -115,7 +119,7 @@ class MCSIM(QWidget):
         self.phase_comboBox.addItems(SimImageSet.allowed_phase_estimation_modes)
         self.frq_comboBox.addItems(SimImageSet.allowed_frq_estimation_modes)
         self.recon_mode_comboBox.addItems(SimImageSet.allowed_reconstruction_modes)
-        self.band_replacement_doubleSpinBox.setValue(0.)
+        self.band_replacement_doubleSpinBox.setValue(0.4)
         self.wiener_doubleSpinBox.setValue(0.1)
 
         self.reconstruct_pushButton.clicked.connect(self._reconstruct_sim)
@@ -243,6 +247,7 @@ class MCSIM(QWidget):
             try:
                 imgs = tifffile.imread(fname)
             except ValueError as e:
+                print(e, file=self.stream)
                 print(e)
                 return
 
@@ -250,6 +255,7 @@ class MCSIM(QWidget):
             try:
                 z = zarr.open(fname, "r")
             except zarr.errors.PathNotFoundError as e:
+                print(e, file=self.stream)
                 print(e)
                 return
 
@@ -268,7 +274,6 @@ class MCSIM(QWidget):
         return imgs
 
     def _get_data_shape(self, fname, array_name=None):
-
 
         if fname.suffix == ".tiff" or fname.suffix == ".tif":
             try:
@@ -521,6 +526,9 @@ class MCSIM(QWidget):
             imgs = imgs.reshape(reshape_size).transpose(transpose_axes)
         except ValueError as e:
             print(e)
+            print("check dimension order definition for errors")
+            print(e, file=self.stream)
+            print("check dimension order definition for errors", file=self.stream)
             return
 
         def _preprocess():
@@ -561,7 +569,9 @@ class MCSIM(QWidget):
         self.otf_array_comboBox.clear()
         fname = Path(self.otf_lineEdit.text())
         array_names = self._get_arrays(fname)
-        self.otf_array_comboBox.addItems(array_names)
+
+        if array_names is not None:
+            self.otf_array_comboBox.addItems(array_names)
 
     def _browse_psf_otf(self):
         file_type = self.otf_format_comboBox.currentText()
@@ -644,12 +654,27 @@ class MCSIM(QWidget):
             fy, fx, = self._convert_pixel_to_frq(cy, cx)
             angle_ind = data_coord[-4]
 
+            # grab peak phases as estimate
+            with self.sim_lock:
+                # leading coords
+                slices = [slice(int(dc), int(dc + 1)) for ii, dc in enumerate(data_coord) if ii < len(data_coord) - 3]
+
+                cy_round = int(np.round(cy))
+                cx_round = int(np.round(cx))
+                slices = slices + [slice(None)] + [slice(cy_round, cy_round + 1), slice(cx_round, cx_round + 1)]
+
+                # todo: slow due to dask ... maybe should embed this info in layer instead
+                phases_deg = np.mod(np.angle(self.sim.imgs_ft[tuple(slices)].compute().squeeze()), 2*np.pi) * 180/np.pi
+
             # add to table
             self._add_parameters()
             idx = self.parameter_tableWidget.rowCount() - 1
             self.parameter_tableWidget.cellWidget(idx, 1).setValue(fy)
             self.parameter_tableWidget.cellWidget(idx, 0).setValue(fx)
             self.parameter_tableWidget.cellWidget(idx, 6).setValue(angle_ind)
+            self.parameter_tableWidget.cellWidget(idx, 2).setValue(phases_deg[0])
+            self.parameter_tableWidget.cellWidget(idx, 3).setValue(phases_deg[1])
+            self.parameter_tableWidget.cellWidget(idx, 4).setValue(phases_deg[2])
 
             # jump viewer to next angle
             ndim = self.viewer.dims.ndim
@@ -795,21 +820,39 @@ class MCSIM(QWidget):
 
                 # saving
                 if self.save_groupBox.isChecked():
-                    self.sim.save_imgs(save_dir=Path(self.save_lineEdit.text()),
-                                       save_suffix=self.save_suffix_lineEdit.text(),
-                                       save_prefix=self.save_prefix_lineEdit.text(),
+                    save_dir = Path(self.save_lineEdit.text())
+                    prefix = self.save_prefix_lineEdit.text()
+                    suffix = self.save_suffix_lineEdit.text()
+
+                    print("saving reconstructed images...", file=self.stream)
+                    print("saving reconstructed images...")
+                    self.sim.save_imgs(save_dir=save_dir,
+                                       save_suffix=suffix,
+                                       save_prefix=prefix,
                                        format=self.save_format_comboBox.currentText(),
                                        save_patterns=False,
                                        save_raw_data=False,
                                        save_processed_data=False)
 
+                    if self.save_diagnostic_plots_checkBox.isChecked():
+                        print("saving diagnostic images...", file=self.stream)
+                        print("saving diagnostic images...")
+                        self.sim.plot_figs(save_dir,
+                                           save_prefix=prefix,
+                                           save_suffix=suffix,
+                                           diagnostics_only=True,  # turn off saving SIM reconstruction figure
+                                           interactive_plotting=False,
+                                           figsize=(20, 10),
+                                           imgs_dpi=300)
 
+        # if thread is already running, let it finish
         if self.worker_thread is not None:
             self.worker_thread.join()
 
         self.worker_thread = threading.Thread(target=_recon_and_save,
                                               args=())
         self.worker_thread.start()
+
     def _show(self):
 
         with self.sim_lock:
@@ -817,7 +860,7 @@ class MCSIM(QWidget):
                 return
 
             if self.sim.imgs is not None:
-                if self.raw_layer is None:
+                if self.raw_layer is None or self.raw_layer not in self.viewer.layers:
                     self.raw_layer = self.viewer.add_image(self.sim.imgs,
                                                            name="raw SIM data")
                 else:
@@ -827,6 +870,7 @@ class MCSIM(QWidget):
                 try:
                     self.viewer.dims.axis_labels = self.sim.axes_names
                 except Exception as e:
+                    print(e, file=self.stream)
                     print(e)
 
                 # set to first slices
@@ -834,7 +878,7 @@ class MCSIM(QWidget):
                     self.viewer.dims.set_current_step(axis=id, value=0)
 
             if self.sim.imgs_ft is not None:
-                if self.fft_layer is None:
+                if self.fft_layer is None or self.fft_layer not in self.viewer.layers:
                     # todo: gamma will not update until slider is moved, see https://github.com/napari/napari/issues/1866
                     self.fft_layer = self.viewer.add_image(abs(self.sim.imgs_ft),
                                                            name="raw SIM data fft",
@@ -844,38 +888,38 @@ class MCSIM(QWidget):
                     self.fft_layer.data = abs(self.sim.imgs_ft)
 
             if self.sim.widefield is not None:
-                if self.widefield_layer is None:
+                if self.widefield_layer is None or self.widefield_layer not in self.viewer.layers:
                     self.widefield_layer = self.viewer.add_image(self.sim.widefield,
                                                                  name="SIM widefield")
                 else:
                     self.widefield_layer.data = self.sim.widefield
 
             if self.sim.widefield_deconvolution is not None:
-                if self.decon_layer is None:
+                if self.decon_layer is None or self.decon_layer not in self.viewer.layers:
                     self.decon_layer = self.viewer.add_image(self.sim.widefield_deconvolution,
                                                              name="SIM deconvolved")
                 else:
                     self.decon_layer.data = self.sim.widefield_deconvolution
 
             if self.sim.mcnr is not None:
-                if self.mcnr_layer is None:
+                if self.mcnr_layer is None or self.mcnr_layer not in self.viewer.layers:
                     self.mcnr_layer = self.viewer.add_image(self.sim.mcnr,
                                                             name="MCNR")
                 else:
                     self.mcnr_layer.data = self.sim.mcnr
 
             if self.sim.sim_os is not None:
-                if self.sim_os_layer is None:
+                if self.sim_os_layer is None or self.sim_os_layer not in self.viewer.layers:
                     self.sim_os_layer = self.viewer.add_image(self.sim.sim_os,
                                                               name="SIM-OS")
                 else:
                     self.sim_os_layer.data = self.sim.sim_os
 
             if self.sim.sim_sr is not None:
-                if self.sim_sr_layer is None:
+                if self.sim_sr_layer is None or self.sim_sr_layer not in self.viewer.layers:
                     self.sim_sr_layer = self.viewer.add_image(self.sim.sim_sr,
                                                               scale=(0.5, 0.5),
-                                                              translate=(0, 0), # todo: correct
+                                                              translate=(0, 0),  # todo: correct
                                                               name="SIM-SR")
                 else:
                     self.sim_sr_layer.data = self.sim.sim_sr
@@ -883,4 +927,3 @@ class MCSIM(QWidget):
     def _browse_save_dir(self):
         file_dir = str(QtW.QFileDialog.getExistingDirectory(self, "", "save directory"))
         self.save_lineEdit.setText(file_dir)
-
