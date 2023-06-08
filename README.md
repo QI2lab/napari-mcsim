@@ -25,3 +25,12 @@ pip install -e .
 ```
 
 For more information on GPU support through CUDA, please see the installation instructions in the [mcSIM repo](https://github.com/QI2lab/mcSIM).
+
+# Usage
+Activate the conda environment (if you not already) and start napari
+```
+conda activate napari-mcsim
+napari
+```
+
+The napari-mcsim plugin is now available in the "plugins" menu. A detailed video walkthrough is in the works.
