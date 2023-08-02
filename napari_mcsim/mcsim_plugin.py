@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QWidget
 from qtpy import uic, QtCore
 import napari.viewer
 
+from numpy import fft
 from pathlib import Path
 import tifffile
 import zarr
@@ -243,6 +244,8 @@ class MCSIM(QWidget):
 
     def _load_file(self, fname, array_name=None):
 
+        fname = Path(fname)
+
         if fname.suffix == ".tiff" or fname.suffix == ".tif":
             try:
                 imgs = tifffile.imread(fname)
@@ -265,6 +268,9 @@ class MCSIM(QWidget):
             for p in path_items:
                 imgs = imgs[p]
 
+            # todo: could also return as dask or etc.
+            imgs = np.array(imgs)
+
         elif fname.suffix == ".hd5f":
             # z = h5py.
             raise NotImplementedError()
@@ -274,6 +280,8 @@ class MCSIM(QWidget):
         return imgs
 
     def _get_data_shape(self, fname, array_name=None):
+
+        fname = Path(fname)
 
         if fname.suffix == ".tiff" or fname.suffix == ".tif":
             try:
@@ -330,7 +338,7 @@ class MCSIM(QWidget):
             ndim = layer.data.ndim
             shape = layer.data.shape
         else:
-            fname = Path(self.browse_LineEdit.text())
+            fname = self.browse_LineEdit.text()
             array_name = self.array_select_comboBox.currentText()
 
             if not fname:
@@ -512,7 +520,7 @@ class MCSIM(QWidget):
         if layer is not None:
             imgs = layer.data
         else:
-            fname = Path(self.browse_LineEdit.text())
+            fname = self.browse_LineEdit.text()
             array_name = self.array_select_comboBox.currentText()
 
             if not fname:
@@ -849,9 +857,11 @@ class MCSIM(QWidget):
         if self.worker_thread is not None:
             self.worker_thread.join()
 
-        self.worker_thread = threading.Thread(target=_recon_and_save,
-                                              args=())
-        self.worker_thread.start()
+        # keep getting Process finished with exit code -1073740940 (0xC0000374)
+        # self.worker_thread = threading.Thread(target=_recon_and_save,
+        #                                       args=())
+        # self.worker_thread.start()
+        _recon_and_save()
 
     def _show(self):
 
