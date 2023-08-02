@@ -54,6 +54,8 @@ class MCSIM(QWidget):
         self.mcnr_layer = None
         self.sim_os_layer = None
         self.sim_sr_layer = None
+        self.otf_layer = None
+        self.otf_outline_layer = None
 
         # threading
         self.sim_lock = threading.Lock() # must acquire this lock before modifying self.sim
@@ -101,6 +103,7 @@ class MCSIM(QWidget):
         self.na_doubleSpinBox.setValue(1.3)
         self.nangles_spinBox.setValue(3)
         self.nphases_spinBox.setValue(3)
+        self.otf_attenuation_doubleSpinBox.setValue(0.0)
 
         # PSF/OTF
         self.browse_otf_pushButton.clicked.connect(self._browse_psf_otf)
@@ -109,6 +112,7 @@ class MCSIM(QWidget):
         self.viewer.events.layers_change.connect(self._refresh_otf_layers)
         self.otf_lineEdit.textChanged.connect(self._refresh_otf_arrays)
         self.set_otf_pushButton.clicked.connect(self._load_otf)
+        self.show_otf_pushButton.clicked.connect(self._show_otf)
 
         # SIM parameters
         self.select_pushButton.clicked.connect(self._select_parameters_mouse)
@@ -596,12 +600,27 @@ class MCSIM(QWidget):
         else:
             layer = layer_list[0]
 
-        fname = Path(str(self.otf_lineEdit.text()))
+        fname = str(self.otf_lineEdit.text())
         array_name = str(self.otf_array_comboBox.currentText())
 
-        generate_from_params = layer is not None and not fname
+        generate_from_params = layer is None and not fname
+
         if generate_from_params:
-            otf = None
+            dxy_um = self.pixel_size_doubleSpinBox.value()
+            na = self.na_doubleSpinBox.value()
+            wavelength_um = self.wavelength_doubleSpinBox.value() / 1e3
+            attenuation_factor = self.otf_attenuation_doubleSpinBox.value()
+
+            ny, nx = self.sim.imgs.shape[-2:]
+            fx = fft.fftshift(fft.fftfreq(nx, dxy_um))
+            fy = fft.fftshift(fft.fftfreq(ny, dxy_um))
+            fxfx, fyfy = np.meshgrid(fx, fy)
+            ff = np.sqrt(fxfx**2 + fyfy**2)
+            fmax = 2 * na / wavelength_um
+
+            # lorentzian times ideal PSF ... other models possible
+            atten = 1 / (1 + (ff / fmax * attenuation_factor)**2)
+            otf = fpsf.circ_aperture_otf(fxfx, fyfy, na, wavelength_um) * atten
         else:
             if layer is not None:
                 data = layer.data
@@ -619,6 +638,44 @@ class MCSIM(QWidget):
 
         with self.sim_lock:
             self.sim.update_otf(otf)
+
+    def _show_otf(self):
+        """
+        Display OTF
+        :return:
+        """
+        if self.sim.otf is not None:
+            if self.otf_layer is None or self.otf_layer not in self.viewer.layers:
+                self.otf_layer = self.viewer.add_image(abs(self.sim.otf),
+                                                       name="OTF")
+            else:
+                self.otf_layer.data = self.sim.otf
+
+            # draw circle showing maximum extent allowed for NA/wavelength
+            cx = np.argmin(np.abs(self.sim.fx))
+            cy = np.argmin(np.abs(self.sim.fy))
+            fmax_pix = self.sim.fmax / self.sim.dfx
+
+            # ellipse either in form [[cy, cx], [sy, sx]] or in bound box form
+            # we use bound box form because that's the representation the .data attribute uses
+            bound_box = np.array([[cy - fmax_pix, cx - fmax_pix],
+                                  [cy + fmax_pix, cx - fmax_pix],
+                                  [cy + fmax_pix, cx + fmax_pix],
+                                  [cy - fmax_pix, cx + fmax_pix]])
+
+            if self.otf_outline_layer is None or self.otf_outline_layer not in self.viewer.layers:
+                # if self.otf_outline_layer is None or self.otf_outline_layer not in self.viewer.layers:
+                self.otf_outline_layer = self.viewer.add_shapes(bound_box,
+                                                                shape_type="ellipse",
+                                                                edge_width=5,
+                                                                edge_color="red",
+                                                                face_color=[0, 0, 0, 0],
+                                                                name="fmax"
+                                                                )
+            else:
+                self.otf_outline_layer.data = bound_box
+
+
 
     def _refresh_channel_axes(self):
         pass
@@ -831,6 +888,8 @@ class MCSIM(QWidget):
                     save_dir = Path(self.save_lineEdit.text())
                     prefix = self.save_prefix_lineEdit.text()
                     suffix = self.save_suffix_lineEdit.text()
+                    save_patterns = self.save_patterns_checkBox.isChecked()
+                    save_raw_imgs = self.save_raw_imgs_checkBox.isChecked()
 
                     print("saving reconstructed images...", file=self.stream)
                     print("saving reconstructed images...")
@@ -838,8 +897,8 @@ class MCSIM(QWidget):
                                        save_suffix=suffix,
                                        save_prefix=prefix,
                                        format=self.save_format_comboBox.currentText(),
-                                       save_patterns=False,
-                                       save_raw_data=False,
+                                       save_patterns=save_patterns,
+                                       save_raw_data=save_raw_imgs,
                                        save_processed_data=False)
 
                     if self.save_diagnostic_plots_checkBox.isChecked():
